@@ -1,6 +1,6 @@
 package lodgefinance.database;
 
-
+import lodgefinance.model.User;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -116,6 +116,29 @@ public class Database{
                 statement.executeUpdate();
             }
         }
+    }
 
+    public User checkLogin(String username, String password) throws SQLException {
+        String sql = "SELECT user_id, username, password FROM USERS WHERE username = ?";
+
+        try (Connection conn = getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql))
+        {
+            stmt.setString(1, username);
+
+            try (ResultSet results = stmt.executeQuery())
+            {
+                if (results.next())
+                {
+                    String storedPassword = results.getString("password");
+                    if (storedPassword.equals(password))
+                    {
+                        int userId = results.getInt("user_id");
+                        return new User(userId, username, storedPassword);
+                    }
+                }
+            }
+        }
+        return null;
     }
 }

@@ -2,7 +2,7 @@ package lodgefinance;
 
 import com.sun.net.httpserver.HttpServer;
 import lodgefinance.database.Database;
-import lodgefinance.web.StatusHandler;
+import lodgefinance.web.WebHandler;
 
 import java.net.InetSocketAddress;
 import java.nio.file.Path;
@@ -20,7 +20,7 @@ public class Main {
             db.initialize();
 
             HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", port),0);
-            server.createContext("/", new StatusHandler(db));
+            server.createContext("/", new WebHandler(db));
             Runtime.getRuntime().addShutdownHook(new Thread(() -> server.stop(0)));
             server.start();
 
