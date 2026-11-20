@@ -3,6 +3,7 @@ package lodgefinance;
 import com.sun.net.httpserver.HttpServer;
 import lodgefinance.database.Database;
 import lodgefinance.web.WebHandler;
+import lodgefinance.database.TransactionRepository;
 
 import java.net.InetSocketAddress;
 import java.nio.file.Path;
@@ -18,9 +19,10 @@ public class Main {
         try {
             Database db = new Database(databasePath);
             db.initialize();
+            TransactionRepository repository = new TransactionRepository(db);
 
             HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", port),0);
-            server.createContext("/", new WebHandler(db));
+            server.createContext("/", new WebHandler(db, repository));
             Runtime.getRuntime().addShutdownHook(new Thread(() -> server.stop(0)));
             server.start();
 

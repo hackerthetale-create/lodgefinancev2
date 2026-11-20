@@ -40,7 +40,7 @@ public class Transaction {
         return description;
     }
 
-    private int getUserID() {
+    public int getUserID() {
         return userID;
     }
 

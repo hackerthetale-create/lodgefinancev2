@@ -9,6 +9,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Stack;
+import java.time.LocalDate;
 
 public class TransactionManager {
     private List<Transaction> transactions;
@@ -113,4 +114,52 @@ public class TransactionManager {
         }
         return sorted;
     }
+
+    public void addTransaction(LocalDate date, String description, String type, int amount, int userID)
+            throws SQLException {
+        //set 0 as temporary id until database assigns its auto increment number
+        Transaction transaction = new Transaction(0, date, type, amount, description, userID);
+        if (!transaction.isValid()){
+            throw new IllegalArgumentException("Invalid details");
+        }
+        repository.insertTransaction(transaction);
+        getTransaction(); // reloads the list with the new id assigned by database
+    }
+
+    public boolean updateTransaction(int transactionID, LocalDate date, String description, String type,
+                                     int amount, int userID) throws SQLException{
+        Transaction transaction = new Transaction(transactionID, date, type, amount, description, userID);
+        if (!transaction.isValid()){
+            throw new IllegalArgumentException("Invalid details");
+        }
+        boolean updated = repository.updateTransaction(transaction);
+        getTransaction();
+        return updated;
+    }
+
+    public boolean deleteTransaction(int transactionID) throws SQLException{
+        getTransaction();
+        Transaction transaction = binarySearchID(transactionID);
+        if (transaction == null) {
+            return false;
+        }
+        boolean deleted = repository.deleteTransaction(transactionID);
+        if(deleted) {
+            deletedStack.push(transaction);
+            transactions.remove(transaction);
+        }
+        return deleted;
+    }
+
+    public boolean undoDelete() throws SQLException {
+        if (deletedStack.empty()) {
+            return false;
+        }
+        Transaction transaction = deletedStack.peek();
+        repository.restoreTransaction(transaction);
+        deletedStack.pop();
+        getTransaction();
+        return true;
+    }
+
 }

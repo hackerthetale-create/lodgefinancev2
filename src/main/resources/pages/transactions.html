@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Transactions</title>
+</head>
+<body>
+<body>
+<h1>Transactions</h1>
+<p><a href="/">Back to index</a></p>
+<h2>Add a transaction</h2>
+<form method="post" action="/transactions/add">
+    <p>
+        <label for="date">Date</label>
+        <input type="date" id="date" name="date" required>
+    </p>
+    <p>
+        <label for="description">Description</label>
+        <input type="text" id="description" name="description" required>
+    </p>
+    <p>
+        <label for="type">Type</label>
+        <select id="type" name="type" required>
+            <option value="">Choose a type</option>
+            <option value="Income">Income</option>
+            <option value="Expense">Expense</option>
+        </select>
+    </p>
+    <p>
+        <label for="amount">Amount (whole numbers only)</label>
+        <input type="number" id="amount" name="amount" min="1" step="1" required>
+    </p>
+    <button type="submit">Add transaction</button>
+</form>
+<h2>Transaction history</h2>
+<table>
+    <thead>
+    <tr>
+        <th scope="col">ID</th>
+        <th scope="col">Date</th>
+        <th scope="col">Description</th>
+        <th scope="col">Type</th>
+        <th scope="col">Amount</th>
+        <th scope="col">Last modified by (user ID)</th>
+    </tr>
+    </thead>
+    <tbody>
+    {{transactionRows}}
+    </tbody>
+</table>
+</body>
+</body>
+</html>

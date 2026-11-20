@@ -14,22 +14,32 @@ import java.util.Base64;
 import java.util.HashMap;
 import java.util.Map;
 import java.security.SecureRandom;
+import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
 
 import lodgefinance.database.Database;
 import lodgefinance.model.User;
+import lodgefinance.database.TransactionRepository;
+import lodgefinance.model.Transaction;
+import lodgefinance.service.TransactionManager;
 
 public class WebHandler implements HttpHandler {
     private final Database database;
     private final String loginPage;
     private final String indexPage;
-
+    private final String transactionsPage;
+    private final TransactionRepository transactionRepository;
+    private final Map<String, TransactionManager> transactionManagers = new HashMap<>();
     private final Map<String, Integer> sessions = new HashMap<>();
     private final SecureRandom random = new SecureRandom();
 
-    public WebHandler(Database database) throws IOException {
+    public WebHandler(Database database, TransactionRepository transactionRepository) throws IOException {
         this.database = database;
-        loginPage = loadPage("/pages/login.html");
-        indexPage = loadPage("/pages/index.html");
+        this.transactionRepository = transactionRepository;
+
+        this.loginPage = loadPage("/pages/login.html");
+        this.indexPage = loadPage("/pages/index.html");
+        this.transactionsPage = loadPage("/pages/transactions.html");
     }
 
     private String loadPage(String path) throws IOException {
@@ -67,6 +77,10 @@ public class WebHandler implements HttpHandler {
                 } else {
                     showIndexPage(exchange);
                 }
+            } else if ("/transactions".equals(path) && "GET".equals(method)) {
+                showTransactionsPage(exchange);
+            } else if ("/transactions/add".equals(path) && "POST".equals(method)) {
+                // @TODO add this method later: handleAddTransaction(exchange);
             } else if ("/logout".equals(path)) {
                 handleLogout(exchange);
             } else {
@@ -121,7 +135,9 @@ public class WebHandler implements HttpHandler {
                 sendLoginPage(exchange, 401, "Incorrect username or password");
                 return;
             }
-            sessions.remove(getToken(exchange)); //remove previous token from browser
+            String prevToken = getToken(exchange);
+            sessions.remove(prevToken); //remove previous token from browser
+            transactionManagers.remove(prevToken);
             String token = generateToken();
             sessions.put(token, user.getUserID()); //mark which user owns this token
             System.out.println(" put token " + token +" for user "
@@ -166,11 +182,48 @@ public class WebHandler implements HttpHandler {
         send(exchange, statusCode, html, "text/html");
     }
 
+    private void showTransactionsPage(HttpExchange exchange) throws IOException {
+        String token = getToken(exchange);
+
+        if (!sessions.containsKey(token)){
+            redirect(exchange, "/login");
+            return;
+        }
+        TransactionManager mngr = transactionManagers.get(token);
+        if (mngr == null){
+            mngr = new TransactionManager(transactionRepository);
+            transactionManagers.put(token, mngr);
+        }
+        try {
+            mngr.getTransaction();
+            StringBuilder rows = new StringBuilder();
+            for (Transaction transaction : mngr.linearSearchDescription("")) {
+                rows.append("<tr>");
+                rows.append("<td>").append(transaction.getTransactionID()).append("</td>");
+                rows.append("<td>").append(transaction.getDate()).append("</td>");
+                rows.append("<td>").append(escapeHtml(transaction.getDescription())).append("</td>");
+                rows.append("<td>").append(escapeHtml(transaction.getType())).append("</td>");
+                rows.append("<td>").append(transaction.getAmount()).append("</td>");
+                rows.append("<td>").append(transaction.getUserID()).append("</td>");
+                rows.append("</tr>");
+            }
+            // if the loop added nothing, show one message across all six columns
+            if (rows.length() == 0){
+                rows.append("<tr><td colspan=\"6\">No transactions yet.</td></tr>");
+            }
+            String html = transactionsPage.replace("{{transactionRows}}", rows.toString());
+        } catch (SQLException e) {
+            System.out.println("Cannot load transactions: " + e.getMessage());
+            send(exchange, 503, "Unable to load transactions", "text/plain");
+        }
+    }
+
     private void handleLogout(HttpExchange exchange)  throws IOException {
         String token = getToken(exchange);
 
-        // delete token from session
+        // delete token from sessions
         sessions.remove(token);
+        transactionManagers.remove(token);
         //delete cookie from browser
         clearCookie(exchange);
         redirect(exchange, "/login");
