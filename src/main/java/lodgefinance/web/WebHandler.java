@@ -27,30 +27,18 @@ public class WebHandler implements HttpHandler {
     private final Database database;
     private final String loginPage;
     private final String indexPage;
-    private final String transactionsPage;
-    private final TransactionRepository transactionRepository;
-    private final Map<String, TransactionManager> transactionManagers = new HashMap<>();
+    private final TransactionHandler transactionHandler;
     private final Map<String, Integer> sessions = new HashMap<>();
     private final SecureRandom random = new SecureRandom();
 
     public WebHandler(Database database, TransactionRepository transactionRepository) throws IOException {
         this.database = database;
-        this.transactionRepository = transactionRepository;
-
+        this.transactionHandler = new TransactionHandler(transactionRepository);
         this.loginPage = loadPage("/pages/login.html");
         this.indexPage = loadPage("/pages/index.html");
-        this.transactionsPage = loadPage("/pages/transactions.html");
     }
 
-    private String loadPage(String path) throws IOException {
-        try (InputStream input = WebHandler.class.getResourceAsStream(path)) {
-            if (input == null) {
-                throw new IOException("Missing pages: " + path);
-            }
-            return new String(input.readAllBytes(), StandardCharsets.UTF_8);
-        }
-    }
-
+    // the main url routing method
     @Override
     public synchronized void handle(HttpExchange exchange) throws IOException {
         try {
@@ -77,20 +65,34 @@ public class WebHandler implements HttpHandler {
                 } else {
                     showIndexPage(exchange);
                 }
-            } else if ("/transactions".equals(path) && "GET".equals(method)) {
-                showTransactionsPage(exchange);
-            } else if ("/transactions/add".equals(path) && "POST".equals(method)) {
-                // @TODO add this method later: handleAddTransaction(exchange);
-            } else if ("/logout".equals(path)) {
+            }
+            else if ("/logout".equals(path)) {
                 handleLogout(exchange);
-            } else {
+            } else if(path!=null && path.startsWith("/transactions")) {
+
+                String token = WebHandler.getToken(exchange);
+                Integer userID = sessions.get(token);
+
+                if (userID == null) {
+                    WebHandler.redirect(exchange, "/login");
+                    return;
+                }
+
+                transactionHandler.handle(exchange, userID);
+            }
+
+            else {
                 send(exchange, 404, "Page not found.", "text/plain");
             }
+
         } finally {
             exchange.close();
         }
-    }
+    } // end of public synchronized void handle(HttpExchange exchange)
 
+
+
+    //--- login handling and cookie handling methods
     private void showLoginPage (HttpExchange exchange) throws IOException {
         String token = getToken(exchange);
         if (sessions.containsKey(token)){
@@ -137,7 +139,6 @@ public class WebHandler implements HttpHandler {
             }
             String prevToken = getToken(exchange);
             sessions.remove(prevToken); //remove previous token from browser
-            transactionManagers.remove(prevToken);
             String token = generateToken();
             sessions.put(token, user.getUserID()); //mark which user owns this token
             System.out.println(" put token " + token +" for user "
@@ -182,48 +183,11 @@ public class WebHandler implements HttpHandler {
         send(exchange, statusCode, html, "text/html");
     }
 
-    private void showTransactionsPage(HttpExchange exchange) throws IOException {
-        String token = getToken(exchange);
-
-        if (!sessions.containsKey(token)){
-            redirect(exchange, "/login");
-            return;
-        }
-        TransactionManager mngr = transactionManagers.get(token);
-        if (mngr == null){
-            mngr = new TransactionManager(transactionRepository);
-            transactionManagers.put(token, mngr);
-        }
-        try {
-            mngr.getTransaction();
-            StringBuilder rows = new StringBuilder();
-            for (Transaction transaction : mngr.linearSearchDescription("")) {
-                rows.append("<tr>");
-                rows.append("<td>").append(transaction.getTransactionID()).append("</td>");
-                rows.append("<td>").append(transaction.getDate()).append("</td>");
-                rows.append("<td>").append(escapeHtml(transaction.getDescription())).append("</td>");
-                rows.append("<td>").append(escapeHtml(transaction.getType())).append("</td>");
-                rows.append("<td>").append(transaction.getAmount()).append("</td>");
-                rows.append("<td>").append(transaction.getUserID()).append("</td>");
-                rows.append("</tr>");
-            }
-            // if the loop added nothing, show one message across all six columns
-            if (rows.length() == 0){
-                rows.append("<tr><td colspan=\"6\">No transactions yet.</td></tr>");
-            }
-            String html = transactionsPage.replace("{{transactionRows}}", rows.toString());
-        } catch (SQLException e) {
-            System.out.println("Cannot load transactions: " + e.getMessage());
-            send(exchange, 503, "Unable to load transactions", "text/plain");
-        }
-    }
-
     private void handleLogout(HttpExchange exchange)  throws IOException {
         String token = getToken(exchange);
 
         // delete token from sessions
         sessions.remove(token);
-        transactionManagers.remove(token);
         //delete cookie from browser
         clearCookie(exchange);
         redirect(exchange, "/login");
@@ -239,7 +203,17 @@ public class WebHandler implements HttpHandler {
     }
 
 
-    private String getToken(HttpExchange exchange) {
+    private void clearCookie(HttpExchange exchange) {
+        exchange.getResponseHeaders().add(
+                "Set-Cookie",
+                "sessionToken=; Path=/; Max-Age=0;"
+                        + " HttpOnly; SameSite=Strict");
+    }
+    //---end login handling and cookie handling methods
+
+
+    //---- utility methods , public static
+    public static String getToken(HttpExchange exchange) {
         String cookieHeader =
                 exchange.getRequestHeaders().getFirst("Cookie");
         if (cookieHeader == null) {
@@ -257,14 +231,16 @@ public class WebHandler implements HttpHandler {
         return null;
     }
 
-    private void clearCookie(HttpExchange exchange) {
-        exchange.getResponseHeaders().add(
-                "Set-Cookie",
-                "sessionToken=; Path=/; Max-Age=0;"
-                        + " HttpOnly; SameSite=Strict");
+    public static String loadPage(String path) throws IOException {
+        try (InputStream input = WebHandler.class.getResourceAsStream(path)) {
+            if (input == null) {
+                throw new IOException("Missing pages: " + path);
+            }
+            return new String(input.readAllBytes(), StandardCharsets.UTF_8);
+        }
     }
 
-    private String escapeHtml(String text) {
+    public static String escapeHtml(String text) {
         return text.replace("&", "&amp;")
                 .replace("<", "&lt;")
                 .replace(">", "&gt;")
@@ -272,17 +248,26 @@ public class WebHandler implements HttpHandler {
                 .replace("'", "&#39;");
     }
 
-    private void redirect(HttpExchange exchange, String location) throws IOException {
+    public static void methodNotAllowed(HttpExchange exchange, String allowedMethod)
+            throws IOException {
+        exchange.getResponseHeaders().set("Allow", allowedMethod);
+        WebHandler.send(exchange, 405, "Method not allowed.", "text/plain");
+    }
+
+    public static void redirect(HttpExchange exchange, String location) throws IOException {
         exchange.getResponseHeaders().set("Location", location);
         exchange.getResponseHeaders().set("Cache-Control", "no-store");
         exchange.sendResponseHeaders(303, -1);
     }
 
-    private void send(HttpExchange exchange, int status, String body, String contentType) throws IOException {
+    public static void send(HttpExchange exchange, int status, String body, String contentType) throws IOException {
         byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
         exchange.getResponseHeaders().set("Content-Type", contentType + "; charset=UTF-8");
         exchange.getResponseHeaders().set("Cache-Control", "no-store");
         exchange.sendResponseHeaders(status, bytes.length);
         exchange.getResponseBody().write(bytes);
     }
+
+
+    //----  end  utility methods , public static
 }

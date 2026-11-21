@@ -5,11 +5,12 @@
     <title>Transactions</title>
 </head>
 <body>
-<body>
 <h1>Transactions</h1>
 <p><a href="/">Back to index</a></p>
-<h2>Add a transaction</h2>
-<form method="post" action="/transactions/add">
+<button type="button" onclick="openAddDialog()">Add transaction</button>
+<dialog id="addDialog" aria-labelledby="addTitle">
+    <h2 id="addTitle">Add a transaction</h2>
+    <form id="addTransactionForm" method="post" action="/transactions/add">
     <p>
         <label for="date">Date</label>
         <input type="date" id="date" name="date" required>
@@ -30,8 +31,12 @@
         <label for="amount">Amount (whole numbers only)</label>
         <input type="number" id="amount" name="amount" min="1" step="1" required>
     </p>
-    <button type="submit">Add transaction</button>
-</form>
+        <button type="submit">Save transaction</button>
+        <button type="button" onclick="document.getElementById('addDialog').close()">
+            Cancel
+        </button>
+    </form>
+</dialog>
 <h2>Transaction history</h2>
 <table>
     <thead>
@@ -42,12 +47,49 @@
         <th scope="col">Type</th>
         <th scope="col">Amount</th>
         <th scope="col">Last modified by (user ID)</th>
+        <th scope="col">Actions</th>
     </tr>
     </thead>
     <tbody>
     {{transactionRows}}
     </tbody>
 </table>
-</body>
+<dialog id="editDialog" aria-labelledby="editTitle">
+    <h2 id="editTitle">Edit transaction</h2>
+    <form method="post" action="/transactions/update">
+        <input type="hidden" id="editID" name="id">
+        <p>
+            <label for="editDate">Date</label>
+            <input type="date" id="editDate" name="date" required>
+        </p>
+        <p>
+            <label for="editDescription">Description</label>
+            <input type="text" id="editDescription" name="description" required>
+        </p>
+        <p>
+            <label for="editType">Type</label>
+            <select id="editType" name="type" required>
+                <option value="Income">Income</option>
+                <option value="Expense">Expense</option>
+            </select>
+        </p>
+        <p>
+            <label for="editAmount">Amount (whole numbers only)</label>
+            <input type="number" id="editAmount" name="amount" min="1" step="1" required>
+        </p>
+        <button type="submit">Save changes</button>
+    </form>
+    <form method="dialog">
+        <button type="submit">Cancel</button>
+    </form>
+</dialog>
+<!-- SCRIPT FUNCTIONALITIES -->
+<script>
+    function openAddDialog() {
+        document.getElementById("addTransactionForm").reset();
+        document.getElementById("addDialog").showModal();
+    }
+</script>
+<!-- TODO: add script functionality for edit -->
 </body>
 </html>
