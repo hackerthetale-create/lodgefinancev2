@@ -50,6 +50,30 @@ public class TransactionHandler {
             }
             return;
         }
+        if (path.equals("/transactions/update")) {
+            if (method.equals("POST")) {
+                handleUpdateTransaction(exchange, userID);
+            } else {
+                WebHandler.methodNotAllowed(exchange, "POST");
+            }
+            return;
+        }
+        if (path.equals("/transactions/delete")) {
+            if (method.equals("POST")) {
+                handleDeleteTransaction(exchange);
+            } else {
+                WebHandler.methodNotAllowed(exchange, "POST");
+            }
+            return;
+        }
+        if (path.equals("/transactions/undo")) {
+            if (method.equals("POST")) {
+                handleUndoDelete(exchange);
+            } else {
+                WebHandler.methodNotAllowed(exchange, "POST");
+            }
+            return;
+        }
         WebHandler.send(exchange,404,"Transaction page not found", "text/plain");
     }
 
@@ -68,7 +92,10 @@ public class TransactionHandler {
                 rows.append("<td>").append(WebHandler.escapeHtml(transaction.getType())).append("</td>");
                 rows.append("<td>").append(transaction.getAmount()).append("</td>");
                 rows.append("<td>").append(transaction.getUserID()).append("</td>");
-                rows.append("<td><button type=\"button\" onclick=\"openEdit(this)\">Edit</button></td>");
+                rows.append("<td>");
+                rows.append("<button type=\"button\" onclick=\"openEdit(this)\">Edit</button> ");
+                rows.append("<button type=\"button\" onclick=\"openDelete(this)\">Delete</button>");
+                rows.append("</td>");
                 rows.append("</tr>");
             }
             // if the loop added nothing, show one message across all six columns
@@ -114,13 +141,80 @@ public class TransactionHandler {
             WebHandler.send(exchange, 400, "Please enter a valid date", "text/plain");
             return;
         } catch (IllegalArgumentException e) {
-            WebHandler.send(exchange, 400, "Please enter a description, choose Income or Expense, and use a positive amount",
-                    "text/plain");
+            WebHandler.send(exchange, 400, "Please enter a description, choose Income or Expense, and use "
+                    + "a positive amount", "text/plain");
         return;
         } catch (SQLException e) {
         System.out.println("Could not add transaction: " + e.getMessage());
         WebHandler.send(exchange, 503, "Unable to save the transaction", "text/plain");
         return;
+        }
+        WebHandler.redirect(exchange, "/transactions");
+    }
+
+    private void handleUpdateTransaction(HttpExchange exchange, int userID) throws IOException{
+        try {
+            Map<String, String> form = readForm(exchange);
+            int transactionID = Integer.parseInt(form.getOrDefault("id", ""));
+            LocalDate date = LocalDate.parse(form.getOrDefault("date", ""));
+            String description = form.getOrDefault("description", "");
+            String type = form.getOrDefault("type", "");
+            int amount = Integer.parseInt(form.getOrDefault("amount", ""));
+            boolean updated = manager.updateTransaction(transactionID,date,description,type,amount,userID);
+            if(!updated) {
+                WebHandler.send(exchange, 404, "This transaction no longer exists", "text/plain");
+                return;
+            }
+        } catch (DateTimeParseException e){
+            WebHandler.send(exchange, 400, "Enter a valid date!", "text/plain");
+            return;
+        } catch (NumberFormatException e) {
+            WebHandler.send(exchange, 400, "Transaction ID and amount must be WHOLE numbers",
+                    "text/plain");
+            return;
+        } catch (IllegalArgumentException e) {
+            WebHandler.send(exchange, 400, "Enter a description, choose Income or Expense, and use a " +
+                            "positive amount", "text/plain");
+            return;
+        } catch (SQLException e) {
+            System.out.println("Could not update transaction: " + e.getMessage());
+            WebHandler.send(exchange, 503, "Unable to update the transaction", "text/plain");
+            return;
+        }
+        WebHandler.redirect(exchange, "/transactions");
+    }
+
+    private void handleDeleteTransaction(HttpExchange exchange) throws IOException {
+        try {
+            Map<String, String> form = readForm(exchange);
+            int transactionID = Integer.parseInt(form.getOrDefault("id", ""));
+            if (!manager.deleteTransaction(transactionID)) {
+                WebHandler.send(exchange, 404, "This transaction no longer exists", "text/plain");
+                return;
+            }
+        } catch (IllegalArgumentException e){
+            WebHandler.send(exchange, 400, "Invalid transaction ID", "text/plain");
+            return;
+        } catch (SQLException e) {
+            System.out.println("Could not delete transaction: " + e.getMessage());
+            WebHandler.send(exchange, 503, "Unable to delete the transaction", "text/plain");
+            return;
+        }
+        WebHandler.redirect(exchange, "/transactions");
+    }
+
+    private void handleUndoDelete(HttpExchange exchange) throws IOException {
+        try {
+            boolean restored = manager.undoDelete();
+            if (!restored) {
+                WebHandler.send(exchange, 409, "There are no deleted transactions to restore",
+                        "text/plain");
+                return;
+            }
+        } catch (SQLException e) {
+            System.out.println("Undo failed: " + e.getMessage());
+            WebHandler.send(exchange, 503, "Unable to complete undo", "text/plain");
+            return;
         }
         WebHandler.redirect(exchange, "/transactions");
     }

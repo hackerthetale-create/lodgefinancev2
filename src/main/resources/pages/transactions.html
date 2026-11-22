@@ -38,6 +38,9 @@
     </form>
 </dialog>
 <h2>Transaction history</h2>
+<form method="post" action="/transactions/undo">
+    <button type="submit">Undo last deletion</button>
+</form>
 <table>
     <thead>
     <tr>
@@ -83,13 +86,52 @@
         <button type="submit">Cancel</button>
     </form>
 </dialog>
-<!-- SCRIPT FUNCTIONALITIES -->
+<dialog id="deleteDialog" aria-labelledby="deleteTitle">
+    <h2 id="deleteTitle">Delete transaction?</h2>
+    <p id="deleteSummary"></p>
+    <form method="post" action="/transactions/delete">
+        <input type="hidden" id="deleteID" name="id">
+
+        <button type="button" autofocus
+                onclick="document.getElementById('deleteDialog').close()">
+            Cancel
+        </button>
+        <button type="submit">Delete transaction</button>
+    </form>
+</dialog>
+<!-- JAVASCRIPT FUNCTIONALITIES -->
 <script>
     function openAddDialog() {
         document.getElementById("addTransactionForm").reset();
         document.getElementById("addDialog").showModal();
     }
+    function openEdit(button) {
+        const cells = button.closest("tr").cells;
+        const transactionID = cells[0].textContent;
+
+        document.getElementById("editTitle").textContent = "Edit transaction #" + transactionID;
+        document.getElementById("editID").value = transactionID;
+        document.getElementById("editDate").value = cells[1].textContent;
+        document.getElementById("editDescription").value = cells[2].textContent;
+        document.getElementById("editType").value = cells[3].textContent;
+        document.getElementById("editAmount").value = cells[4].textContent;
+
+        document.getElementById("editDialog").showModal();
+    }
+    function openDelete(button) {
+        const cells = button.closest("tr").cells;
+        const id = cells[0].textContent;
+        const date = cells[1].textContent;
+        const description = cells[2].textContent;
+        const type = cells[3].textContent;
+        const amount = cells[4].textContent;
+
+        document.getElementById("deleteID").value = id;
+        document.getElementById("deleteSummary").textContent =
+            `#${id} · ${date} · ${description} · ${type} · ${amount}`;
+
+        document.getElementById("deleteDialog").showModal();
+    }
 </script>
-<!-- TODO: add script functionality for edit -->
 </body>
 </html>
