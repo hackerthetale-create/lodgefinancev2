@@ -38,17 +38,35 @@
     </form>
 </dialog>
 <h2>Transaction history</h2>
+<form id="transactionSearch" method="get" action="/transactions">
+    <label for="search">Search by description</label>
+    <input type="search" id="search" name="search" value="{{searchText}}">
+    <button type="submit">Search</button>
+    <a href="/transactions">Show all</a>
+</form>
 <form method="post" action="/transactions/undo">
     <button type="submit">Undo last deletion</button>
 </form>
 <table>
     <thead>
     <tr>
-        <th scope="col">ID</th>
-        <th scope="col">Date</th>
+        <th scope="col">
+            ID
+            <button form="transactionSearch" name="sort" value="id-asc" aria-label="Sort by lowest ID first">↑</button>
+            <button form="transactionSearch" name="sort" value="id-desc" aria-label="Sort by highest ID first">↓</button>
+        </th>
+        <th scope="col">
+            Date
+            <button form="transactionSearch" name="sort" value="date-asc" aria-label="Sort by oldest date first">↑</button>
+            <button form="transactionSearch" name="sort" value="date-desc" aria-label="Sort by newest date first">↓</button>
+        </th>
         <th scope="col">Description</th>
         <th scope="col">Type</th>
-        <th scope="col">Amount</th>
+        <th scope="col">
+            Amount
+            <button form="transactionSearch" name="sort" value="amount-asc" aria-label="Sort by lowest amount first">↑</button>
+            <button form="transactionSearch" name="sort" value="amount-desc" aria-label="Sort by highest amount first">↓</button>
+        </th>
         <th scope="col">Last modified by (user ID)</th>
         <th scope="col">Actions</th>
     </tr>

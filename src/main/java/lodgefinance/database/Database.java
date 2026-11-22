@@ -53,7 +53,7 @@ public class Database{
                 }
                 //schema created, now add sample data
                 addInitialUsers(conn);
-                addSampleTransactions(conn);
+                // addSampleTransactions(conn);
                 conn.commit();
             } catch(SQLException e) {
                 conn.rollback();
@@ -95,7 +95,7 @@ public class Database{
             }
         }
         String[][] samples = {
-                {"2026-11-14", "Membership dues", "Income", "25", "treasurer"},
+                {"2026-11-01", "Initial Deposit", "Income", "10000", "treasurer"},
                 {"2026-11-13", "Event supplies", "Expense", "48", "treasurer"},
                 {"2026-11-12", "Fall fellowship registration", "Income", "150", "treasurer"},
                 {"2026-11-10", "Service day registration", "Income", "60", "lodgechief"},

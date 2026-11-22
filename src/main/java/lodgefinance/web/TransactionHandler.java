@@ -10,9 +10,11 @@ import java.util.HashMap;
 import java.util.Map;
 import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
+import java.util.List;
 
 import lodgefinance.database.TransactionRepository;
 import lodgefinance.model.Transaction;
+import lodgefinance.model.User;
 import lodgefinance.service.TransactionManager;
 
 public class TransactionHandler {
@@ -28,7 +30,7 @@ public class TransactionHandler {
     }
 
     // main transaction url routing and handling
-    public synchronized void handle(HttpExchange exchange, Integer userID) throws IOException {
+    public synchronized void handle(HttpExchange exchange, User user) throws IOException {
         String path = exchange.getRequestURI().getPath();
         String method = exchange.getRequestMethod();
 
@@ -41,10 +43,9 @@ public class TransactionHandler {
             }
             return;
         }
-        // @TODO edit, delete, undo handling
         if (path.equals("/transactions/add")){
             if (method.equals("POST")){
-                handleAddTransaction(exchange, userID);
+                handleAddTransaction(exchange, user.getUserID());
             } else {
                 WebHandler.methodNotAllowed(exchange, "POST");
             }
@@ -52,7 +53,7 @@ public class TransactionHandler {
         }
         if (path.equals("/transactions/update")) {
             if (method.equals("POST")) {
-                handleUpdateTransaction(exchange, userID);
+                handleUpdateTransaction(exchange, user.getUserID());
             } else {
                 WebHandler.methodNotAllowed(exchange, "POST");
             }
@@ -60,7 +61,7 @@ public class TransactionHandler {
         }
         if (path.equals("/transactions/delete")) {
             if (method.equals("POST")) {
-                handleDeleteTransaction(exchange);
+                handleDeleteTransaction(exchange, user);
             } else {
                 WebHandler.methodNotAllowed(exchange, "POST");
             }
@@ -68,7 +69,7 @@ public class TransactionHandler {
         }
         if (path.equals("/transactions/undo")) {
             if (method.equals("POST")) {
-                handleUndoDelete(exchange);
+                handleUndoDelete(exchange, user);
             } else {
                 WebHandler.methodNotAllowed(exchange, "POST");
             }
@@ -77,14 +78,43 @@ public class TransactionHandler {
         WebHandler.send(exchange,404,"Transaction page not found", "text/plain");
     }
 
-
-
     private void showTransactionsPage(HttpExchange exchange) throws IOException {
         TransactionManager mngr = getManager();
         try {
+            String keyword = "";
+            String sortField = "amount";
+            boolean ascending = true;
+            String query = exchange.getRequestURI().getRawQuery();
+            if (query != null) {
+                String[] fields = query.split("&");
+                for (int i = 0; i < fields.length; i++) {
+                    String field = fields[i];
+                    if (field.startsWith("search=")) {
+                        String value = field.substring("search=".length());
+                        keyword = URLDecoder.decode(value, StandardCharsets.UTF_8).trim();
+                    } else if (field.equals("sort=id-asc")) {
+                        sortField = "id";
+                    } else if (field.equals("sort=id-desc")) {
+                        sortField = "id";
+                        ascending = false;
+                    } else if (field.equals("sort=amount-desc")) {
+                        ascending = false;
+                    } else if (field.equals("sort=date-asc")) {
+                        sortField = "date";
+                        ascending = true;
+                    } else if (field.equals("sort=date-desc")) {
+                        sortField = "date";
+                        ascending = false;
+                    }
+                }
+            }
             mngr.getTransaction();
             StringBuilder rows = new StringBuilder();
-            for (Transaction transaction : mngr.linearSearchDescription("")) {
+            List<Transaction> matches = mngr.linearSearchDescription(keyword);
+            List<Transaction> sorted = mngr.sortTransactions(matches, sortField, ascending);
+
+            for (int i = 0; i < sorted.size(); i++) {
+                Transaction transaction = sorted.get(i);
                 rows.append("<tr>");
                 rows.append("<td>").append(transaction.getTransactionID()).append("</td>");
                 rows.append("<td>").append(transaction.getDate()).append("</td>");
@@ -102,7 +132,9 @@ public class TransactionHandler {
             if (rows.length() == 0){
                 rows.append("<tr><td colspan=\"6\">No transactions yet.</td></tr>");
             }
-            String html = transactionsPage.replace("{{transactionRows}}", rows.toString());
+            String html = transactionsPage
+                    .replace("{{searchText}}", WebHandler.escapeHtml(keyword))
+                    .replace("{{transactionRows}}", rows.toString());
             WebHandler.send(exchange, 200, html, "text/html");
         } catch (SQLException e) {
             System.out.println("Cannot load transactions: " + e.getMessage());
@@ -184,11 +216,11 @@ public class TransactionHandler {
         WebHandler.redirect(exchange, "/transactions");
     }
 
-    private void handleDeleteTransaction(HttpExchange exchange) throws IOException {
+    private void handleDeleteTransaction(HttpExchange exchange, User user) throws IOException {
         try {
             Map<String, String> form = readForm(exchange);
             int transactionID = Integer.parseInt(form.getOrDefault("id", ""));
-            if (!manager.deleteTransaction(transactionID)) {
+            if (!manager.deleteTransaction(transactionID, user)) {
                 WebHandler.send(exchange, 404, "This transaction no longer exists", "text/plain");
                 return;
             }
@@ -203,9 +235,9 @@ public class TransactionHandler {
         WebHandler.redirect(exchange, "/transactions");
     }
 
-    private void handleUndoDelete(HttpExchange exchange) throws IOException {
+    private void handleUndoDelete(HttpExchange exchange, User user) throws IOException {
         try {
-            boolean restored = manager.undoDelete();
+            boolean restored = manager.undoDelete(user);
             if (!restored) {
                 WebHandler.send(exchange, 409, "There are no deleted transactions to restore",
                         "text/plain");

@@ -2,24 +2,22 @@ package lodgefinance.service;
 
 import lodgefinance.database.TransactionRepository;
 import lodgefinance.model.Transaction;
+import lodgefinance.model.User;
 
 import java.sql.SQLException;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Locale;
-import java.util.Stack;
+import java.util.*;
 import java.time.LocalDate;
 
 public class TransactionManager {
     private List<Transaction> transactions;
-    private final Stack<Transaction> deletedStack;
+    private final Map<User, Stack<Transaction>> undoStacks;
+    //private final Stack<Transaction> deletedStack;
     private final TransactionRepository repository;
 
     public TransactionManager(TransactionRepository repository){
         this.repository = repository;
         this.transactions = new ArrayList<>();
-        this.deletedStack = new Stack<>();
+        this.undoStacks = new HashMap<>();
     }
 
     public void getTransaction() throws SQLException {
@@ -79,7 +77,13 @@ public class TransactionManager {
                     } else {
                         mustShift = prev.getAmount() < current.getAmount();
                     }
-                } else if (field.equals("date")){
+                } else if (field.equals("id")) {
+                    if (asc) {
+                        mustShift = prev.getTransactionID() > current.getTransactionID();
+                    } else {
+                        mustShift = prev.getTransactionID() < current.getTransactionID();
+                    }
+                } else if (field.equals("date")) {
                     if (asc) {
                         // oldest date first
                         mustShift = prev.getDate().isAfter(current.getDate());
@@ -87,22 +91,22 @@ public class TransactionManager {
                         // newest date first
                         mustShift = prev.getDate().isBefore(current.getDate());
                     }
-                } else if (field.equals("description")){
+                } else if (field.equals("description")) {
                     String prevText = prev.getDescription();
                     String currentText = current.getDescription();
-
-                    // case insensitive
-                    // returns positive when prevText comes later in alphabet, vice versa
                     int comparison = prevText.compareToIgnoreCase(currentText);
+
                     if (asc) {
                         mustShift = comparison > 0;
                     } else {
                         mustShift = comparison < 0;
                     }
+                } else {
+                    return sorted;
+                }
 
-                    if (!mustShift){
-                        break;
-                    }
+                if (!mustShift) {
+                    break;
                 }
 
                 // move previous transaction 1 place to the right
@@ -137,7 +141,7 @@ public class TransactionManager {
         return updated;
     }
 
-    public boolean deleteTransaction(int transactionID) throws SQLException{
+    public boolean deleteTransaction(int transactionID, User user) throws SQLException{
         getTransaction();
         Transaction transaction = binarySearchID(transactionID);
         if (transaction == null) {
@@ -145,14 +149,21 @@ public class TransactionManager {
         }
         boolean deleted = repository.deleteTransaction(transactionID);
         if(deleted) {
+            Stack<Transaction> deletedStack = undoStacks.get(user);
+            if (deletedStack == null) {
+                deletedStack = new Stack<Transaction>();
+                undoStacks.put(user, deletedStack);
+            }
             deletedStack.push(transaction);
             transactions.remove(transaction);
         }
         return deleted;
     }
 
-    public boolean undoDelete() throws SQLException {
-        if (deletedStack.empty()) {
+    public boolean undoDelete(User user) throws SQLException {
+        Stack<Transaction> deletedStack = undoStacks.get(user);
+
+        if ( deletedStack== null || deletedStack.isEmpty()) {
             return false;
         }
         Transaction transaction = deletedStack.peek();

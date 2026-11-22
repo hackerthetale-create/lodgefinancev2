@@ -28,7 +28,7 @@ public class WebHandler implements HttpHandler {
     private final String loginPage;
     private final String indexPage;
     private final TransactionHandler transactionHandler;
-    private final Map<String, Integer> sessions = new HashMap<>();
+    private final Map<String, User> sessions = new HashMap<>();
     private final SecureRandom random = new SecureRandom();
 
     public WebHandler(Database database, TransactionRepository transactionRepository) throws IOException {
@@ -57,9 +57,9 @@ public class WebHandler implements HttpHandler {
             } else if ("/".equals(path)) {
                 // redirect to /login if not logged in, show index page if already logged in
                 String token = getToken(exchange);
-                Integer userId = sessions.get(token);
+                User user = sessions.get(token);
 
-                if (userId == null) {
+                if (user == null) {
                     System.out.println("user not logged in, goto login page first");
                     redirect(exchange, "/login");
                 } else {
@@ -71,14 +71,14 @@ public class WebHandler implements HttpHandler {
             } else if(path!=null && path.startsWith("/transactions")) {
 
                 String token = WebHandler.getToken(exchange);
-                Integer userID = sessions.get(token);
+                User user = sessions.get(token);
 
-                if (userID == null) {
+                if (user == null) {
                     WebHandler.redirect(exchange, "/login");
                     return;
                 }
 
-                transactionHandler.handle(exchange, userID);
+                transactionHandler.handle(exchange, user);
             }
 
             else {
@@ -140,7 +140,7 @@ public class WebHandler implements HttpHandler {
             String prevToken = getToken(exchange);
             sessions.remove(prevToken); //remove previous token from browser
             String token = generateToken();
-            sessions.put(token, user.getUserID()); //mark which user owns this token
+            sessions.put(token, user); //mark which user owns this token
             System.out.println(" put token " + token +" for user "
                     + user.getUsername()
                     + " with userID " + user.getUserID());
@@ -174,9 +174,9 @@ public class WebHandler implements HttpHandler {
         }
 
         String token = getToken(exchange);
-        Integer userId = sessions.get(token);
+        User user = sessions.get(token);
 
-        String html = indexPage.replace("{{username}}", userId.toString())
+        String html = indexPage.replace("{{username}}", user.getUsername())
                 .replace("{{databaseStatus}}", dbStatus)
                 .replace("{{userCount}}", userCount)
                 .replace("{{transactionCount}}", transactionCount);
