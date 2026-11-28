@@ -38,6 +38,15 @@
         </button>
     </form>
 </dialog>
+<h2>Treasurer’s report</h2>
+<form action="/transactions" method="get">
+    <label for="startDate">Start date</label>
+    <input type="date" id="startDate" name="startDate" required>
+    <label for="endDate">End date</label>
+    <input type="date" id="endDate" name="endDate" required>
+    <button type="submit">Show report</button>
+</form>
+<p>{{reportPeriod}}</p>
 <h2>Transaction history</h2>
 <form id="transactionSearch" method="get" action="/transactions">
     <label for="search">Search by description</label>

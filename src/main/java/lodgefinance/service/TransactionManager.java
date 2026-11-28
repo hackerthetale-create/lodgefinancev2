@@ -36,6 +36,44 @@ public class TransactionManager {
         return balance;
     }
 
+    public long calculateOpeningBalance(LocalDate startDate) {
+        long openingBalance = 0;
+        for (Transaction transaction: transactions) {
+            if (transaction.getDate().isBefore(startDate)) {
+                if ("Income".equals(transaction.getType())){
+                    openingBalance += transaction.getAmount();
+                } else {
+                    openingBalance -= transaction.getAmount();
+                }
+            }
+        }
+        return openingBalance;
+    }
+
+    public long calculatePeriodIncome(LocalDate startDate, LocalDate endDate) {
+        long income = 0;
+        for (Transaction transaction : transactions) {
+            LocalDate date = transaction.getDate();
+            boolean inPeriod = !date.isBefore(startDate) && !date.isAfter(endDate);
+            if (inPeriod && "Income".equals(transaction.getType())) {
+                income += transaction.getAmount();
+            }
+        }
+        return income;
+    }
+
+    public long calculatePeriodExpenses(LocalDate startDate, LocalDate endDate) {
+        long expenses = 0;
+        for (Transaction transaction : transactions) {
+            LocalDate date = transaction.getDate();
+            boolean inPeriod = !date.isBefore(startDate) && !date.isAfter(endDate);
+            if (inPeriod && "Expense".equals(transaction.getType())) {
+                expenses += transaction.getAmount();
+            }
+        }
+        return expenses;
+    }
+
     public List<Transaction> linearSearchDescription(String keyword){
         // case insensitive search
         List<Transaction> matches = new ArrayList<>();
@@ -138,6 +176,14 @@ public class TransactionManager {
         if (!transaction.isValid()){
             throw new IllegalArgumentException("Invalid details");
         }
+        if ("Expense".equals(type)) {
+            getTransaction();
+            long availableBalance = calculateBalance();
+            if (amount > availableBalance) {
+                throw new IllegalStateException(
+                        "Expense exceeds the available lodge balance of " + availableBalance + ".");
+            }
+        }
         repository.insertTransaction(transaction);
         getTransaction(); // reloads the list with the new id assigned by database
     }
@@ -147,6 +193,27 @@ public class TransactionManager {
         Transaction transaction = new Transaction(transactionID, date, type, amount, description, userID);
         if (!transaction.isValid()){
             throw new IllegalArgumentException("Invalid details");
+        }
+        getTransaction();
+        Transaction original = binarySearchID(transactionID);
+        if (original == null) {
+            return false;
+        }
+        long projectedBalance = calculateBalance();
+        // Reverse the original entry
+        if ("Income".equals(original.getType())) {
+            projectedBalance -= original.getAmount();
+        } else {
+            projectedBalance += original.getAmount();
+        }
+        // Apply the edited entry
+        if ("Income".equals(type)) {
+            projectedBalance += amount;
+        } else {
+            projectedBalance -= amount;
+        }
+        if (projectedBalance < 0) {
+            throw new IllegalStateException("Edit rejected. The lodge balance would be " + projectedBalance);
         }
         boolean updated = repository.updateTransaction(transaction);
         getTransaction();

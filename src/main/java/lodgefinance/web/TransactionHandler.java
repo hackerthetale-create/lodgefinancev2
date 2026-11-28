@@ -83,6 +83,8 @@ public class TransactionHandler {
         TransactionManager mngr = getManager();
         try {
             String keyword = "";
+            LocalDate startDate = null;
+            LocalDate endDate = null;
             String sortField = "amount";
             boolean ascending = true;
             String query = exchange.getRequestURI().getRawQuery();
@@ -96,6 +98,10 @@ public class TransactionHandler {
                     if (field.startsWith("search=")) {
                         String value = field.substring("search=".length());
                         keyword = URLDecoder.decode(value, StandardCharsets.UTF_8).trim();
+                    } else if (field.startsWith("startDate=")) {
+                        startDate = LocalDate.parse(field.substring("startDate=".length()));
+                    } else if (field.startsWith("endDate=")){
+                        endDate = LocalDate.parse(field.substring("endDate=".length()));
                     } else if (field.equals("sort=id-asc")) {
                         sortField = "id";
                     } else if (field.equals("sort=id-desc")) {
@@ -111,6 +117,11 @@ public class TransactionHandler {
                         ascending = false;
                     }
                 }
+            }
+            if (startDate != null && endDate != null && startDate.isAfter(endDate)){
+                WebHandler.send(exchange, 400, "The start date must be on or before the end date",
+                        "text/plain");
+                return;
             }
             mngr.getTransaction();
             StringBuilder rows = new StringBuilder();
@@ -136,7 +147,20 @@ public class TransactionHandler {
             if (rows.length() == 0){
                 rows.append("<tr><td colspan=\"6\">No transactions yet.</td></tr>");
             }
+            String reportPeriod = "";
+            if (startDate != null && endDate != null) {
+                long openingBalance = mngr.calculateOpeningBalance(startDate);
+                long income = mngr.calculatePeriodIncome(startDate, endDate);
+                long expenses = mngr.calculatePeriodExpenses(startDate, endDate);
+                long closingBalance = openingBalance + income - expenses;
+                reportPeriod = "Report period: " + startDate + " to " + endDate
+                        + " | Opening balance: " + openingBalance
+                        + " | Income: " + income
+                        + " | Expenses: " + expenses
+                        + " | Closing balance: " + closingBalance;
+            }
             String html = transactionsPage
+                    .replace("{{reportPeriod}}", reportPeriod)
                     .replace("{{balance}}", Long.toString(mngr.calculateBalance()))
                     .replace("{{searchText}}", WebHandler.escapeHtml(keyword))
                     .replace("{{transactionRows}}", rows.toString());
@@ -181,6 +205,9 @@ public class TransactionHandler {
             WebHandler.send(exchange, 400, "Please enter a description, choose Income or Expense, and use "
                     + "a positive amount", "text/plain");
         return;
+        } catch (IllegalStateException e) {
+            WebHandler.send(exchange, 409, e.getMessage(), "text/plain");
+            return;
         } catch (SQLException e) {
         System.out.println("Could not add transaction: " + e.getMessage());
         WebHandler.send(exchange, 503, "Unable to save the transaction", "text/plain");
@@ -212,6 +239,9 @@ public class TransactionHandler {
         } catch (IllegalArgumentException e) {
             WebHandler.send(exchange, 400, "Enter a description, choose Income or Expense, and use a " +
                             "positive amount", "text/plain");
+            return;
+        } catch (IllegalStateException e) {
+            WebHandler.send(exchange, 409, e.getMessage(), "text/plain");
             return;
         } catch (SQLException e) {
             System.out.println("Could not update transaction: " + e.getMessage());
