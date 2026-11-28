@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.sql.SQLException;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.time.LocalDate;
@@ -85,10 +86,13 @@ public class TransactionHandler {
             String sortField = "amount";
             boolean ascending = true;
             String query = exchange.getRequestURI().getRawQuery();
+            System.out.println(query);
             if (query != null) {
                 String[] fields = query.split("&");
+                System.out.println(Arrays.toString(fields));
                 for (int i = 0; i < fields.length; i++) {
                     String field = fields[i];
+                    System.out.print(field);
                     if (field.startsWith("search=")) {
                         String value = field.substring("search=".length());
                         keyword = URLDecoder.decode(value, StandardCharsets.UTF_8).trim();
@@ -133,6 +137,7 @@ public class TransactionHandler {
                 rows.append("<tr><td colspan=\"6\">No transactions yet.</td></tr>");
             }
             String html = transactionsPage
+                    .replace("{{balance}}", Long.toString(mngr.calculateBalance()))
                     .replace("{{searchText}}", WebHandler.escapeHtml(keyword))
                     .replace("{{transactionRows}}", rows.toString());
             WebHandler.send(exchange, 200, html, "text/html");

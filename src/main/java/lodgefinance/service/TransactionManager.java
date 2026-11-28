@@ -24,6 +24,18 @@ public class TransactionManager {
         transactions = repository.getAllTransactions();
     }
 
+    public long calculateBalance(){
+        long balance = 0;
+        for (Transaction transaction : transactions){
+            if ("Income".equals(transaction.getType())) {
+                balance += transaction.getAmount();
+            } else if ("Expense".equals(transaction.getType())) {
+                balance -= transaction.getAmount();
+            }
+        }
+        return balance;
+    }
+
     public List<Transaction> linearSearchDescription(String keyword){
         // case insensitive search
         List<Transaction> matches = new ArrayList<>();
