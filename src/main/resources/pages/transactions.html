@@ -164,17 +164,19 @@
         event.preventDefault();
         const form = event.currentTarget;
         const saveButton = form.querySelector('button[type="submit"]');
-        saveButton.disabled = true;
+        saveButton.disabled = true; //prevents a second check while saving
         try {
             const response = await fetch(form.action, {
                 method: "POST",
                 body: new URLSearchParams(new FormData(form))
             });
+            // overdraft confirmed
             if (!response.ok) {
                 const message = await response.text();
                 window.alert(message);
                 return;
             }
+            //redirect
             window.location.assign(response.url);
         } catch {
             window.alert("Could not reach the server. Refresh the page to check whether the transaction was saved.");
